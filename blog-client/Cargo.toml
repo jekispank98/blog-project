@@ -1,0 +1,10 @@
+[package]
+name = "blog-client"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "blog_client"
+path = "src/lib.rs"
+
+[dependencies]
