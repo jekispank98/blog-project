@@ -10,3 +10,5 @@ resolver = "2"
 [workspace.dependencies]
 clap = "4"
 wasm-bindgen = "0.2"
+
+
