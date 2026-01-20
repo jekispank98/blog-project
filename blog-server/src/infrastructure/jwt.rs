@@ -11,6 +11,7 @@ pub struct Claims {
     exp: usize
 }
 
+#[derive(Clone, Debug)]
 pub struct Jwt {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
