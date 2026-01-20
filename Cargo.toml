@@ -14,12 +14,6 @@ edition = "2021"
 [workspace.dependencies]
 clap = "4"
 thiserror = "2.0"
-sqlx = { version = "0.7", features = [
-    "runtime-tokio-rustls",
-    "postgres",
-    "uuid",
-    "chrono",
-    "migrate",
-] }
+
 
 

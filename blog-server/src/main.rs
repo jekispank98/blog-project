@@ -13,10 +13,20 @@ pub mod blog {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     setup_environment();
+    HttpServer::new(|| {
+        App::new()
+            .route("/", web::get().to(index))
+    })
+        .bind("127.0.0.1:8080")?
+        .run()
+        .await;
 
-    // Здесь будет код запуска сервера
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
-    Ok(())
+    let addr = "127.0.0.1:50051".parse()?;
+    let service = ExchangeServiceImpl::new();
 }
 
 fn setup_environment() {
