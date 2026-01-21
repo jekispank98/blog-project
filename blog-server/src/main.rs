@@ -1,10 +1,14 @@
 use std::net::SocketAddr;
+use std::path::Path;
 use actix_web::{web, App, HttpServer};
+use sqlx::migrate;
+use sqlx::migrate::Migrator;
+use crate::infrastructure::database::create_pool;
 
 mod server;
 mod handlers;
 mod domain;
-mod data;
+pub mod data;
 mod application;
 mod infrastructure;
 mod presentation;
@@ -19,7 +23,9 @@ async fn main() -> std::io::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let _addr: SocketAddr = "127.0.0.1:50051".parse().expect("Invalid address");
-
+    let pool = create_pool().await.expect("Error creating database pool");
+    let migrator = Migrator::new(Path::new("./migrations")).await.expect("Failed to build");
+    migrator.run(&pool).await.expect("Failed to run migrations");
     HttpServer::new(|| {
         App::new()
         // .route("/", web::get().to(...))

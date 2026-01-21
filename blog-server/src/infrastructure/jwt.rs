@@ -1,14 +1,15 @@
 use actix_web::Result;
-use chrono::{Duration, Utc};
-use dotenvy::dotenv;
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, errors::Error as JwtError};
+use jsonwebtoken::{
+    decode, encode, errors::Error as JwtError, DecodingKey, EncodingKey, Header, Validation,
+};
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::env;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
     user_id: String,
     username: String,
-    exp: usize
+    exp: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -19,8 +20,8 @@ pub struct Jwt {
 
 impl Jwt {
     pub fn new() -> Jwt {
-        let secret = dotenvy::var("JWT_SECRET")
-            .expect("JWT_SECRET must be set in environment variables");
+        let secret =
+            dotenvy::var("JWT_SECRET").expect("JWT_SECRET must be set in environment variables");
 
         Jwt {
             encoding_key: EncodingKey::from_secret(secret.as_bytes()),
@@ -28,7 +29,11 @@ impl Jwt {
         }
     }
 
-    pub fn generate_token(&self, user_id: String, username: String) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn generate_token(
+        &self,
+        user_id: String,
+        username: String,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
         // Текущее время в секундах с Unix эпохи
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -48,13 +53,8 @@ impl Jwt {
         encode(&Header::default(), &claims, &self.encoding_key)
     }
     pub fn verify_token(&self, token: &str) -> Result<Claims, JwtError> {
-        // Создаем валидацию с настройками по умолчанию
         let validation = Validation::default();
-
-        // Декодируем и проверяем токен
         let token_data = decode::<Claims>(token, &self.decoding_key, &validation)?;
-
-        // Возвращаем claims
         Ok(token_data.claims)
     }
 }

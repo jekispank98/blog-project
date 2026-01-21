@@ -8,9 +8,11 @@ name = "blog_client"
 path = "src/lib.rs"
 
 [dependencies]
-tonic = "0.12"
+tonic = "0.14.2"
 tokio = { version = "1", features = ["full"] }
-prost = "0.14"
+prost = "0.14.2"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14.2"
+tonic-prost-build = "0.14.2"
+prost-build = "0.14.2"
