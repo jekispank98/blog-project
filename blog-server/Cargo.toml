@@ -28,6 +28,9 @@ argon2 = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 env = "1.0.1"
+anyhow = "1.0.100"
+uuid = { version = "1.19.0", features = ["v4"] }
+log = "0.4.29"
 [build-dependencies]
 tonic-build = "0.14.2"
 tonic-prost-build = "0.14.2"

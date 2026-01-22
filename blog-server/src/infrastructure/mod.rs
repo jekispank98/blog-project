@@ -1,3 +1,4 @@
 pub mod database;
-mod jwt;
+pub mod jwt;
 mod logging;
+pub mod config;

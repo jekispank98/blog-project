@@ -1,13 +1,18 @@
+use crate::infrastructure::database::create_pool;
+use actix_web::{web, App, HttpServer};
+use sqlx::migrate::Migrator;
 use std::net::SocketAddr;
 use std::path::Path;
-use actix_web::{web, App, HttpServer};
-use sqlx::migrate;
-use sqlx::migrate::Migrator;
-use crate::infrastructure::database::create_pool;
+use std::sync::Arc;
+use actix_web::middleware::Logger;
+use tracing::callsite::register;
+use crate::handlers::{configure, AuthService};
+use crate::infrastructure::config::Config;
+use crate::infrastructure::jwt::Jwt;
 
 mod server;
-mod handlers;
-mod domain;
+pub mod handlers;
+pub mod domain;
 pub mod data;
 mod application;
 mod infrastructure;
@@ -23,12 +28,19 @@ async fn main() -> std::io::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let _addr: SocketAddr = "127.0.0.1:50051".parse().expect("Invalid address");
+    let cfg = Config::from_env().expect("invalid config");
     let pool = create_pool().await.expect("Error creating database pool");
     let migrator = Migrator::new(Path::new("./migrations")).await.expect("Failed to build");
     migrator.run(&pool).await.expect("Failed to run migrations");
-    HttpServer::new(|| {
+    let jwt_manager = Arc::new(Jwt::new());
+    let auth_service = Arc::new(AuthService::new(pool.clone(), jwt_manager.clone()));
+    HttpServer::new(move || {
         App::new()
-        // .route("/", web::get().to(...))
+            .wrap(Logger::default())
+            .app_data(web::Data::new(auth_service.clone()))
+            .app_data(web::Data::new(cfg.clone()))
+            .app_data(web::Data::new(pool.clone()))
+            .configure(configure)
     })
         .bind("127.0.0.1:8080")?
         .run()

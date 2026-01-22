@@ -4,5 +4,7 @@ pub enum ParserError {
     UserAlreadyExists,
     InvalidCredentials,
     PostNotFound,
-    Forbidden
+    Forbidden,
+    DatabaseError(String),
+    InternalError(String),
 }

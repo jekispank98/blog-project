@@ -1,3 +1,3 @@
 mod user;
 mod post;
-mod error;
+pub mod error;
