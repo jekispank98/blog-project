@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use blog_client::{http_client::HttpClient, grpc_client::GrpcClient};
+use blog_client::grpc_client::GrpcClient;
+use blog_client::http_client::HttpClient;
 
 #[derive(Parser)]
 #[command(name = "blog-cli", version, about = "CLI client for the blog project")] 
