@@ -100,6 +100,34 @@ pub async fn delete_post(pool: PgPool, id: &str) -> Result<(), ParserError> {
     Ok(())
 }
 
+pub async fn update(
+    pool: &PgPool,
+    id: &str,
+    title: &str,
+    content: &str,
+    updated_at: i64,
+) -> Result<(), ParserError> {
+    let result = sqlx::query(
+        r#"
+        UPDATE posts
+        SET title = $1, content = $2, updated_at = $3
+        WHERE id = $4
+        "#,
+    )
+    .bind(title)
+    .bind(content)
+    .bind(updated_at)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(ParserError::PostNotFound);
+    }
+
+    Ok(())
+}
+
 
 pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<Post>, ParserError> {
     let rows = sqlx::query(

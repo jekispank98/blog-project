@@ -11,9 +11,7 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use log::{error, info, warn};
-use crate::blog::CreatePostRequest;
 use crate::infrastructure::jwt::Jwt;
-use crate::blog::CreatePostRequest as ProtoCreatePostRequest;
 use crate::domain::post::Post as DomainPost;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -270,6 +268,41 @@ impl BlogService {
     pub async fn get_post(&self, id: String) -> Result<DomainPost, ParserError> {
         let post = post_repository::find_by_id(&self.pool, &id).await?;
         post.ok_or(ParserError::PostNotFound)
+    }
+
+    pub async fn update_post(
+        &self,
+        id: String,
+        title: String,
+        content: String,
+        user_id: String
+    ) -> Result<DomainPost, ParserError> {
+        let post = post_repository::find_by_id(&self.pool, &id).await?;
+        
+        match post {
+            Some(p) => {
+                if p.author_id != user_id {
+                    return Err(ParserError::Forbidden);
+                }
+                
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                
+                post_repository::update(&self.pool, &id, &title, &content, now).await?;
+                
+                Ok(DomainPost::new(
+                    id,
+                    title,
+                    content,
+                    user_id,
+                    p.created_at,
+                    now as u64
+                ))
+            },
+            None => Err(ParserError::PostNotFound)
+        }
     }
 
     pub async fn delete_post(&self, id: String, user_id: String) -> Result<(), ParserError> {
