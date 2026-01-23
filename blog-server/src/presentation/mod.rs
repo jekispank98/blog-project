@@ -1,3 +1,3 @@
-mod middleware;
-mod http_handlers;
-mod grpc_service;
+pub mod middleware;
+pub mod http_handlers;
+pub mod grpc_service;

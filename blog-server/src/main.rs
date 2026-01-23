@@ -40,6 +40,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .app_data(web::Data::new(auth_service.clone()))
             .app_data(web::Data::new(blog_service.clone()))
+            .app_data(web::Data::new(jwt_manager.clone()))
             .app_data(web::Data::new(cfg.clone()))
             .app_data(web::Data::new(pool.clone()))
             .configure(configure)
@@ -47,9 +48,5 @@ async fn main() -> std::io::Result<()> {
         .bind("127.0.0.1:8080")?
         .run()
         .await
-}
-
-fn setup_environment() {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 }
 

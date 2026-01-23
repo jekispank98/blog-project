@@ -80,3 +80,57 @@ pub async fn find_by_id(pool: &PgPool, id: &str) -> Result<Option<Post>, ParserE
         )
     }))
 }
+
+
+pub async fn delete_post(pool: PgPool, id: &str) -> Result<(), ParserError> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM posts
+        WHERE id = $1
+        "#,
+    )
+        .bind(id)
+        .execute(&pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(ParserError::PostNotFound);
+    }
+
+    Ok(())
+}
+
+
+pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<Post>, ParserError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, title, content, author_id, created_at, updated_at
+        FROM posts
+        ORDER BY created_at DESC
+        LIMIT $1 OFFSET $2
+        "#,
+    )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(rows.into_iter().map(|r| {
+        Post::new(
+            r.get("id"),
+            r.get("title"),
+            r.get("content"),
+            r.get("author_id"),
+            r.get::<i64, _>("created_at") as u64,
+            r.get::<i64, _>("updated_at") as u64,
+        )
+    }).collect())
+}
+
+pub async fn count(pool: &PgPool) -> Result<i64, ParserError> {
+    let row = sqlx::query("SELECT COUNT(*) FROM posts")
+        .fetch_one(pool)
+        .await?;
+    
+    Ok(row.get(0))
+}

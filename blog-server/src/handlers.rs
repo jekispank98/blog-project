@@ -48,6 +48,25 @@ pub struct CreatePostDto {
     pub content: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default = "default_offset")]
+    pub offset: i64,
+}
+
+fn default_limit() -> i64 { 10 }
+fn default_offset() -> i64 { 0 }
+
+#[derive(Debug, Serialize)]
+pub struct PostListResponse {
+    pub posts: Vec<DomainPost>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
+
 #[post("/register")]
 pub async fn register(
     body: web::Json<RegisterDto>,
@@ -192,20 +211,15 @@ impl AuthService {
         })
     }
 }
-pub struct AuthenticatedUser {
-    pub user_id: String
-}
 impl FromRequest for AuthenticatedUser {
     type Error = actix_web::Error;
     type Future = Ready<Result<Self, Self::Error>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        match req.extensions().get::<String>() {
-            Some(id) => ready(Ok(AuthenticatedUser {
-                user_id: id.clone(),
-            })),
+        match req.extensions().get::<AuthenticatedUser>() {
+            Some(user) => ready(Ok(user.clone())),
             None => {
-                log::error!("Middleware failed to provide user_id extension");
+                log::error!("Middleware failed to provide AuthenticatedUser extension");
                 ready(Err(ErrorUnauthorized("Unauthorized: Missing user context")))
             }
         }
@@ -257,6 +271,33 @@ impl BlogService {
         let post = post_repository::find_by_id(&self.pool, &id).await?;
         post.ok_or(ParserError::PostNotFound)
     }
+
+    pub async fn delete_post(&self, id: String, user_id: String) -> Result<(), ParserError> {
+        let post = post_repository::find_by_id(&self.pool, &id).await?;
+        
+        match post {
+            Some(p) => {
+                if p.author_id != user_id {
+                    return Err(ParserError::Forbidden);
+                }
+                post_repository::delete_post(self.pool.clone(), &id).await?;
+                Ok(())
+            },
+            None => Err(ParserError::PostNotFound)
+        }
+    }
+
+    pub async fn list_posts(&self, limit: i64, offset: i64) -> Result<PostListResponse, ParserError> {
+        let posts = post_repository::list(&self.pool, limit, offset).await?;
+        let total = post_repository::count(&self.pool).await?;
+
+        Ok(PostListResponse {
+            posts,
+            total,
+            limit,
+            offset,
+        })
+    }
 }
 
 pub async fn create_post_handler(
@@ -284,13 +325,44 @@ pub async fn get_post_handler(
     Ok(HttpResponse::Ok().json(post))
 }
 
+pub async fn delete_post_handler(
+    service: web::Data<Arc<BlogService>>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<impl Responder, ParserError> {
+    let post_id = path.into_inner();
+    service.delete_post(post_id, user.user_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn list_posts_handler(
+    service: web::Data<Arc<BlogService>>,
+    query: web::Query<ListQuery>,
+) -> Result<impl Responder, ParserError> {
+    let response = service.list_posts(query.limit, query.offset).await?;
+    Ok(HttpResponse::Ok().json(response))
+}
+
+use crate::presentation::middleware::{jwt_validator, AuthenticatedUser};
+use actix_web_httpauth::middleware::HttpAuthentication;
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
+    let auth = HttpAuthentication::bearer(jwt_validator);
+
     cfg.service(
         web::scope("/api")
             .service(register)
             .service(login)
-            .route("/posts/{id}", web::get().to(get_post_handler))
-            .route("/posts", web::post().to(create_post_handler))
-
+            .service(
+                web::scope("/posts")
+                    .route("", web::get().to(list_posts_handler))
+                    .route("/{id}", web::get().to(get_post_handler))
+                    .service(
+                        web::scope("")
+                            .wrap(auth)
+                            .route("", web::post().to(create_post_handler))
+                            .route("/{id}", web::delete().to(delete_post_handler))
+                    )
+            )
     );
 }

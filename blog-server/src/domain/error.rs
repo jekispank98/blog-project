@@ -23,6 +23,7 @@ impl ResponseError for ParserError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::PostNotFound => StatusCode::NOT_FOUND,
+            Self::Forbidden => StatusCode::FORBIDDEN,
             Self::UserAlreadyExists => StatusCode::CONFLICT,
             Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             _ => StatusCode::INTERNAL_SERVER_ERROR,

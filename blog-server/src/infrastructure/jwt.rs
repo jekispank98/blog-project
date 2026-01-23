@@ -7,9 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
-    user_id: String,
-    username: String,
-    exp: usize,
+    pub user_id: String,
+    pub username: String,
+    pub exp: usize,
 }
 
 #[derive(Clone, Debug)]
