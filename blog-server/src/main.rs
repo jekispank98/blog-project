@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use actix_web::middleware::Logger;
 use tracing::callsite::register;
-use crate::handlers::{configure, AuthService};
+use crate::handlers::{configure, AuthService, BlogService};
 use crate::infrastructure::config::Config;
 use crate::infrastructure::jwt::Jwt;
 
@@ -16,7 +16,7 @@ pub mod domain;
 pub mod data;
 mod application;
 mod infrastructure;
-mod presentation;
+pub mod presentation;
 
 pub mod blog {
     tonic::include_proto!("blog");
@@ -34,10 +34,12 @@ async fn main() -> std::io::Result<()> {
     migrator.run(&pool).await.expect("Failed to run migrations");
     let jwt_manager = Arc::new(Jwt::new());
     let auth_service = Arc::new(AuthService::new(pool.clone(), jwt_manager.clone()));
+    let blog_service = Arc::new(BlogService::new(pool.clone()));
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .app_data(web::Data::new(auth_service.clone()))
+            .app_data(web::Data::new(blog_service.clone()))
             .app_data(web::Data::new(cfg.clone()))
             .app_data(web::Data::new(pool.clone()))
             .configure(configure)

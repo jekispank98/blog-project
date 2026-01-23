@@ -1,14 +1,20 @@
-use crate::data::user_repository;
+use std::future::{ready, Ready};
+use crate::data::{post_repository, user_repository};
 use crate::domain::error::ParserError;
-use actix_web::{post, web, HttpResponse, Responder};
+use actix_web::{post, web, FromRequest, HttpMessage, HttpRequest, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use actix_web::dev::Payload;
+use actix_web::error::ErrorUnauthorized;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use log::{error, info, warn};
+use crate::blog::CreatePostRequest;
 use crate::infrastructure::jwt::Jwt;
+use crate::blog::CreatePostRequest as ProtoCreatePostRequest;
+use crate::domain::post::Post as DomainPost;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct RegisterDto {
@@ -34,6 +40,12 @@ pub struct UserDto {
     pub id: String,
     pub username: String,
     pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreatePostDto {
+    pub title: String,
+    pub content: String,
 }
 
 #[post("/register")]
@@ -95,7 +107,7 @@ impl AuthService {
     ) -> Result<AuthResponse, ParserError> {
         let existing_user = user_repository::find_by_email(&self.pool, email)
             .await
-            .map_err(|e| ParserError::DatabaseError(e.to_string()))?;
+            .map_err(|e| ParserError::DatabaseError(e))?;
 
         if existing_user.is_some() {
             return Err(ParserError::UserAlreadyExists);
@@ -112,7 +124,7 @@ impl AuthService {
 
         let new_user = user_repository::create_user(&self.pool, user_id, email, &password_hash)
             .await
-            .map_err(|e| ParserError::DatabaseError(e.to_string()))?;
+            .map_err(|e| ParserError::DatabaseError(e))?;
 
         let token = self
             .jwt_service
@@ -137,7 +149,7 @@ impl AuthService {
             .await
             .map_err(|e| {
                 error!("Database error during login for {}: {}", email, e);
-                ParserError::DatabaseError(e.to_string())
+                ParserError::DatabaseError(e)
             })?
             .ok_or_else(|| {
                 warn!("Login failed: user {} not found", email);
@@ -180,7 +192,105 @@ impl AuthService {
         })
     }
 }
+pub struct AuthenticatedUser {
+    pub user_id: String
+}
+impl FromRequest for AuthenticatedUser {
+    type Error = actix_web::Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        match req.extensions().get::<String>() {
+            Some(id) => ready(Ok(AuthenticatedUser {
+                user_id: id.clone(),
+            })),
+            None => {
+                log::error!("Middleware failed to provide user_id extension");
+                ready(Err(ErrorUnauthorized("Unauthorized: Missing user context")))
+            }
+        }
+    }
+}
+
+pub struct BlogService {
+    pool: PgPool,
+}
+
+impl BlogService {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn create_post(
+        &self,
+        title: String,
+        content: String,
+        author_id: String
+    ) -> Result<DomainPost, ParserError> {
+
+        let post_id = uuid::Uuid::new_v4().to_string();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        post_repository::create(
+            &self.pool,
+            &post_id,
+            &title,
+            &content,
+            &author_id,
+            now
+        ).await?;
+
+        Ok(DomainPost::new(
+            post_id,
+            title,
+            content,
+            author_id,
+            now as u64,
+            now as u64
+        ))
+    }
+
+    pub async fn get_post(&self, id: String) -> Result<DomainPost, ParserError> {
+        let post = post_repository::find_by_id(&self.pool, &id).await?;
+        post.ok_or(ParserError::PostNotFound)
+    }
+}
+
+pub async fn create_post_handler(
+    service: web::Data<Arc<BlogService>>,
+    user: AuthenticatedUser,
+    body: web::Json<CreatePostDto>,
+) -> impl Responder {
+
+    match service.create_post(body.title.clone(), body.content.clone(), user.user_id.clone()).await {
+        Ok(post) => HttpResponse::Created().json(post),
+        Err(e) => {
+            log::error!("Failed to create post: {:?}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+pub async fn get_post_handler(
+    service: web::Data<Arc<BlogService>>,
+    path: web::Path<String>,
+) -> Result<impl Responder, ParserError> {
+    let post_id = path.into_inner();
+
+    let post = service.get_post(post_id).await?;
+    Ok(HttpResponse::Ok().json(post))
+}
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(register).service(login);
+    cfg.service(
+        web::scope("/api")
+            .service(register)
+            .service(login)
+            .route("/posts/{id}", web::get().to(get_post_handler))
+            .route("/posts", web::post().to(create_post_handler))
+
+    );
 }

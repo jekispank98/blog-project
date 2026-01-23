@@ -34,13 +34,11 @@ impl Jwt {
         user_id: String,
         username: String,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        // Текущее время в секундах с Unix эпохи
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs() as usize;
 
-        // 24 часа в секундах = 24 * 60 * 60 = 86400
         let expiration = now + 86400;
 
         let claims = Claims {
