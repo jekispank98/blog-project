@@ -139,7 +139,7 @@ impl AuthService {
 
         let user_id = uuid::Uuid::new_v4();
 
-        let new_user = user_repository::create_user(&self.pool, user_id, email, &password_hash)
+        user_repository::create_user(&self.pool, user_id, email, &password_hash)
             .await
             .map_err(|e| ParserError::DatabaseError(e))?;
 

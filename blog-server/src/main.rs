@@ -32,10 +32,11 @@ async fn main() -> std::io::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    println!("DB: {:?}", env::var("DATABASE_URL"));
     let cfg = Config::from_env().expect("invalid config");
     let pool = create_pool().await.expect("Error creating database pool");
-    
-    let migrator = Migrator::new(Path::new("./migrations")).await.expect("Failed to build migrator");
+
+    let migrator = Migrator::new(Path::new("./blog-server/migrations")).await.expect("Failed to build migrator");
     migrator.run(&pool).await.expect("Failed to run migrations");
 
     let jwt_manager = Arc::new(Jwt::new());

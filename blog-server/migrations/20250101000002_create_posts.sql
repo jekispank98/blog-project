@@ -1,11 +1,12 @@
 CREATE TABLE IF NOT EXISTS posts (
-    id BIGSERIAL PRIMARY KEY,
-    title VARCHAR,
-    content TEXT,
-    author_id BIGINT, FOREIGN KEY на users.id,
-    created_at TIMESTAMP WITH TIME ZONE,
-    updated_at TIMESTAMP WITH TIME ZONE
-)
-FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-CREATE INDEX IF NOT EXISTS idx_created_at ON users (created_at);
-CREATE INDEX IF NOT EXISTS idx_author_id ON users (author_id);
+                                     id BIGSERIAL PRIMARY KEY,
+                                     title VARCHAR NOT NULL,
+                                     content TEXT NOT NULL,
+                                     author_id BIGINT NOT NULL,
+                                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT fk_author
+    FOREIGN KEY (author_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+    );
