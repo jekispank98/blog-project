@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust Blog WASM</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 10px; }
+        label { display: block; margin-bottom: 5px; }
+        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { padding: 10px 15px; cursor: pointer; }
+        .post { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; position: relative; }
+        .post .delete-btn { position: absolute; top: 10px; right: 10px; color: red; cursor: pointer; }
+        #auth-status { margin-bottom: 20px; font-weight: bold; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Rust Blog</h1>
+
+    <div id="auth-status">Not logged in</div>
+
+    <div id="auth-forms">
+        <div id="login-form-div">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <p>Don't have an account? <a href="#" id="show-register">Register</a></p>
+        </div>
+
+        <div id="register-form-div" class="hidden">
+            <h2>Register</h2>
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="reg-username">Username</label>
+                    <input type="text" id="reg-username" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-email">Email</label>
+                    <input type="email" id="reg-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" required>
+                </div>
+                <button type="submit">Register</button>
+            </form>
+            <p>Already have an account? <a href="#" id="show-login">Login</a></p>
+        </div>
+    </div>
+
+    <div id="logged-in-actions" class="hidden">
+        <button id="logout-btn">Logout</button>
+        <h2>Create Post</h2>
+        <form id="create-post-form">
+            <div class="form-group">
+                <label for="post-title">Title</label>
+                <input type="text" id="post-title" required>
+            </div>
+            <div class="form-group">
+                <label for="post-content">Content</label>
+                <textarea id="post-content" rows="5" required></textarea>
+            </div>
+            <button type="submit">Create Post</button>
+        </form>
+    </div>
+
+    <hr>
+    <h2>Posts</h2>
+    <div id="posts-container">Loading posts...</div>
+
+    <script type="module">
+        import init, { BlogApp } from './blog-wasm/pkg/blog_wasm.js';
+
+        async function run() {
+            await init();
+            
+            const app = new BlogApp("http://localhost:3000");
+            
+            const authStatus = document.getElementById('auth-status');
+            const authForms = document.getElementById('auth-forms');
+            const loggedInActions = document.getElementById('logged-in-actions');
+            const loginFormDiv = document.getElementById('login-form-div');
+            const registerFormDiv = document.getElementById('register-form-div');
+            const postsContainer = document.getElementById('posts-container');
+
+            function updateUI() {
+                const authenticated = app.is_authenticated();
+                if (authenticated) {
+                    authStatus.textContent = "Logged in";
+                    authForms.classList.add('hidden');
+                    loggedInActions.classList.remove('hidden');
+                } else {
+                    authStatus.textContent = "Not logged in";
+                    authForms.classList.remove('hidden');
+                    loggedInActions.classList.add('hidden');
+                }
+                loadPosts();
+            }
+
+            async function loadPosts() {
+                try {
+                    const res = await app.load_posts(10, 0);
+                    postsContainer.innerHTML = '';
+                    if (res.posts.length === 0) {
+                        postsContainer.textContent = 'No posts found.';
+                        return;
+                    }
+                    res.posts.forEach(post => {
+                        const postEl = document.createElement('div');
+                        postEl.className = 'post';
+                        postEl.innerHTML = `
+                            <h3>${post.title}</h3>
+                            <p>${post.content}</p>
+                            <small>Author: ${post.author_id}</small>
+                        `;
+                        
+                        if (app.is_authenticated()) {
+                            const deleteBtn = document.createElement('span');
+                            deleteBtn.className = 'delete-btn';
+                            deleteBtn.textContent = '✖';
+                            deleteBtn.onclick = async () => {
+                                if (confirm('Delete this post?')) {
+                                    try {
+                                        await app.delete_post(post.id);
+                                        loadPosts();
+                                    } catch (e) {
+                                        alert('Error deleting post: ' + e);
+                                    }
+                                }
+                            };
+                            postEl.appendChild(deleteBtn);
+                        }
+                        
+                        postsContainer.appendChild(postEl);
+                    });
+                } catch (e) {
+                    postsContainer.textContent = 'Error loading posts: ' + e;
+                }
+            }
+
+            document.getElementById('show-register').onclick = (e) => {
+                e.preventDefault();
+                loginFormDiv.classList.add('hidden');
+                registerFormDiv.classList.remove('hidden');
+            };
+
+            document.getElementById('show-login').onclick = (e) => {
+                e.preventDefault();
+                registerFormDiv.classList.add('hidden');
+                loginFormDiv.classList.remove('hidden');
+            };
+
+            document.getElementById('login-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                try {
+                    await app.login(email, password);
+                    updateUI();
+                } catch (e) {
+                    alert('Login failed: ' + e);
+                }
+            };
+
+            document.getElementById('register-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const username = document.getElementById('reg-username').value;
+                const email = document.getElementById('reg-email').value;
+                const password = document.getElementById('reg-password').value;
+                try {
+                    await app.register(username, email, password);
+                    updateUI();
+                } catch (e) {
+                    alert('Registration failed: ' + e);
+                }
+            };
+
+            document.getElementById('logout-btn').onclick = () => {
+                app.logout();
+                updateUI();
+            };
+
+            document.getElementById('create-post-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const title = document.getElementById('post-title').value;
+                const content = document.getElementById('post-content').value;
+                try {
+                    await app.create_post(title, content);
+                    document.getElementById('post-title').value = '';
+                    document.getElementById('post-content').value = '';
+                    loadPosts();
+                } catch (e) {
+                    alert('Error creating post: ' + e);
+                }
+            };
+
+            updateUI();
+        }
+
+        run();
+    </script>
+</body>
+</html>
