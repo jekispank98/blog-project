@@ -1,4 +1,17 @@
 #[warn(missing_docs)]
+/// # Blog Server Entry Point
+
+/// This module is the entry point for the `blog-server` application.
+/// It is responsible for initializing the infrastructure, configuring services, and simultaneously
+/// launching two servers: **HTTP (Actix-web)** and **gRPC (Tonic)**.
+
+/// ## Main tasks:
+/// 1. Initialize logging (tracing) and environment variables.
+/// 2. Connecting to the PostgreSQL database and performing migrations.
+/// 3. Configuring business logic layers (`AuthService`, `BlogService`).
+/// 4. Configuring middleware (CORS, Logger).
+/// 5. Launching asynchronous tasks for processing network requests.
+
 use crate::infrastructure::database::create_pool;
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer};
@@ -13,7 +26,6 @@ use crate::presentation::grpc_service::BlogGrpcService;
 use crate::blog::blog_service_server::BlogServiceServer;
 use tonic::transport::Server;
 
-mod server;
 pub mod handlers;
 pub mod domain;
 pub mod data;
@@ -21,6 +33,7 @@ mod application;
 mod infrastructure;
 pub mod presentation;
 
+/// Module for working with gRPC, generated from a .proto file.
 pub mod blog {
     tonic::include_proto!("blog");
 }
@@ -86,20 +99,7 @@ async fn main() -> std::io::Result<()> {
         grpc_server.await
     });
 
-    // Ждем их (они будут работать вечно)
     let _ = tokio::try_join!(http_handle, grpc_handle);
-    /*tokio::select! {
-        res = grpc_server => {
-            if let Err(e) = res {
-                eprintln!("gRPC server error: {}", e);
-            }
-        },
-        res = http_server => {
-            if let Err(e) = res {
-                eprintln!("HTTP server error: {}", e);
-            }
-        }
-    }*/
 
     Ok(())
 }
