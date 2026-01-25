@@ -1,6 +1,5 @@
+#[warn(missing_docs)]
 pub mod error;
-pub mod http_client;
-pub mod grpc_client;
 
 use error::BlogClientError;
 use serde::{Deserialize, Serialize};
@@ -49,6 +48,7 @@ pub struct PostListResponse {
     pub offset: i64,
 }
 
+#[derive(Debug)]
 pub struct BlogClient {
     transport: Transport,
     http_client: Option<reqwest::Client>,
@@ -63,7 +63,10 @@ impl BlogClient {
 
         match &transport {
             Transport::Http(_) => {
-                http_client = Some(reqwest::Client::new());
+                let client = reqwest::Client::builder()
+                    .no_proxy()
+                    .build()?;
+                http_client = Some(client);
             }
             Transport::Grpc(addr) => {
                 let channel = Channel::from_shared(addr.clone())?
@@ -121,12 +124,12 @@ impl BlogClient {
         }
     }
 
-    pub async fn login(&mut self, email: String, password: String) -> Result<AuthResponse, BlogClientError> {
+    pub async fn login(&mut self, username: String, password: String) -> Result<AuthResponse, BlogClientError> {
         match &self.transport {
             Transport::Http(base_url) => {
                 let url = format!("{}/api/login", base_url);
                 let body = serde_json::json!({
-                    "email": email,
+                    "username": username,
                     "password": password
                 });
                 let resp = self.http_client.as_ref().expect("HTTP client not initialized")
@@ -134,9 +137,11 @@ impl BlogClient {
                     .json(&body)
                     .send()
                     .await?;
+                println!("resp: {:?}", resp);
 
                 if resp.status().is_success() {
                     let auth_resp: AuthResponse = resp.json().await?;
+                    println!("auth_resp: {:?}", auth_resp);
                     self.set_token(auth_resp.token.clone());
                     Ok(auth_resp)
                 } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {

@@ -1,3 +1,4 @@
+#[warn(missing_docs)]
 use crate::infrastructure::database::create_pool;
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer};
@@ -71,13 +72,23 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .configure(configure)
     })
-    .bind("0.0.0.0:3000")?
+    .bind("127.0.0.1:8888")?
     .run();
 
-    println!("Starting HTTP server on 0.0.0.0:3000");
+    println!("Starting HTTP server on 127.0.0.1:8888");
     println!("Starting gRPC server on 0.0.0.0:50051");
 
-    tokio::select! {
+    let http_handle = tokio::spawn(async move {
+        http_server.await
+    });
+
+    let grpc_handle = tokio::spawn(async move {
+        grpc_server.await
+    });
+
+    // Ждем их (они будут работать вечно)
+    let _ = tokio::try_join!(http_handle, grpc_handle);
+    /*tokio::select! {
         res = grpc_server => {
             if let Err(e) = res {
                 eprintln!("gRPC server error: {}", e);
@@ -88,7 +99,7 @@ async fn main() -> std::io::Result<()> {
                 eprintln!("HTTP server error: {}", e);
             }
         }
-    }
+    }*/
 
     Ok(())
 }

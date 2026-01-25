@@ -1,3 +1,4 @@
+#[warn(missing_docs)]
 use wasm_bindgen::prelude::*;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};

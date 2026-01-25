@@ -70,6 +70,7 @@ pub async fn register(
     body: web::Json<RegisterDto>,
     auth_service: web::Data<Arc<AuthService>>
 ) -> impl Responder {
+    println!("register is started, body: {:?}", body);
     match auth_service.register(&body.email, &body.username, &body.password).await {
         Ok(auth_data) => {
             HttpResponse::Created().json(auth_data)
@@ -122,7 +123,7 @@ impl AuthService {
         username: &str,
         password: &str,
     ) -> Result<AuthResponse, ParserError> {
-        let existing_user = user_repository::find_by_email(&self.pool, email)
+        let existing_user = user_repository::find_by_email_or_username(&self.pool, username)
             .await
             .map_err(|e| ParserError::DatabaseError(e))?;
 
@@ -139,7 +140,7 @@ impl AuthService {
 
         let user_id = uuid::Uuid::new_v4();
 
-        user_repository::create_user(&self.pool, user_id, email, &password_hash)
+        user_repository::create_user(&self.pool, user_id, username, email, &password_hash)
             .await
             .map_err(|e| ParserError::DatabaseError(e))?;
 
@@ -158,25 +159,26 @@ impl AuthService {
         })
     }
 
-    pub async fn login(&self, email: &str, password: &str) -> Result<AuthResponse, ParserError> {
-        info!("Attempting login for user: {}", email);
+    pub async fn login(&self, username: &str, password: &str) -> Result<AuthResponse, ParserError> {
+        info!("Attempting login for user: {}", username);
 
+        println!("login is started");
         // 1. Поиск пользователя в БД
-        let user = user_repository::find_by_email(&self.pool, email)
+        let user = user_repository::find_by_email_or_username(&self.pool, username)
             .await
             .map_err(|e| {
-                error!("Database error during login for {}: {}", email, e);
+                println!("Database error during login for {}: {}", username, e);
                 ParserError::DatabaseError(e)
             })?
             .ok_or_else(|| {
-                warn!("Login failed: user {} not found", email);
+                println!("Login failed: user {} not found", username);
                 ParserError::InvalidCredentials
             })?;
 
         // 2. Проверка пароля (сравнение входящего пароля с хешем из БД)
         let parsed_hash = PasswordHash::new(&user.password_hash)
             .map_err(|e| {
-                error!("Invalid password hash format in DB for user {}: {}", email, e);
+                error!("Invalid password hash format in DB for user {}: {}", username, e);
                 ParserError::InternalError("Corrupted password hash".to_string())
             })?;
 
@@ -185,7 +187,7 @@ impl AuthService {
             .is_ok();
 
         if !is_valid {
-            warn!("Login failed: invalid password for user {}", email);
+            warn!("Login failed: invalid password for user {}", username);
             return Err(ParserError::InvalidCredentials);
         }
 
@@ -193,11 +195,11 @@ impl AuthService {
         let token = self.jwt_service
             .generate_token(user.id.to_string().clone(), user.email.clone())
             .map_err(|e| {
-                error!("Token generation failed for {}: {}", email, e);
+                error!("Token generation failed for {}: {}", username, e);
                 ParserError::InternalError("Failed to generate token".to_string())
             })?;
 
-        info!("User {} successfully logged in", email);
+        info!("User {} successfully logged in", username);
 
         Ok(AuthResponse {
             token,
@@ -381,7 +383,6 @@ use actix_web_httpauth::middleware::HttpAuthentication;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     let auth = HttpAuthentication::bearer(jwt_validator);
-
     cfg.service(
         web::scope("/api")
             .service(register)
@@ -398,4 +399,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     )
             )
     );
+    cfg.route("/health", web::get().to(|| async { HttpResponse::Ok().body("OK") }));
 }

@@ -35,7 +35,7 @@ pub async fn create(
     sqlx::query(
         r#"
         INSERT INTO posts (id, title, content, author_id, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6)
         "#,
     )
     .bind(id)
