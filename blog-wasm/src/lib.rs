@@ -54,7 +54,7 @@ impl BlogApp {
     }
 
     pub async fn register(&mut self, username: String, email: String, password: String) -> Result<JsValue, JsValue> {
-        let url = format!("{}/api/auth/register", self.base_url);
+        let url = format!("{}/api/register", self.base_url);
         let body = serde_json::json!({
             "username": username,
             "email": email,
@@ -80,7 +80,7 @@ impl BlogApp {
     }
 
     pub async fn login(&mut self, email: String, password: String) -> Result<JsValue, JsValue> {
-        let url = format!("{}/api/auth/login", self.base_url);
+        let url = format!("{}/api/login", self.base_url);
         let body = serde_json::json!({
             "email": email,
             "password": password

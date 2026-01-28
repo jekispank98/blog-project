@@ -370,6 +370,24 @@ pub async fn delete_post_handler(
     Ok(HttpResponse::NoContent().finish())
 }
 
+pub async fn update_post_handler(
+    service: web::Data<Arc<BlogService>>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<CreatePostDto>,
+) -> Result<impl Responder, ParserError> {
+    let post_id = path.into_inner();
+
+    let updated_post = service.update_post(
+        post_id,
+        body.title.clone(),
+        body.content.clone(),
+        user.user_id
+    ).await?;
+
+    Ok(HttpResponse::Ok().json(updated_post))
+}
+
 pub async fn list_posts_handler(
     service: web::Data<Arc<BlogService>>,
     query: web::Query<ListQuery>,
@@ -396,6 +414,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                             .wrap(auth)
                             .route("", web::post().to(create_post_handler))
                             .route("/{id}", web::delete().to(delete_post_handler))
+                            .route("/{id}", web::put().to(update_post_handler))
                     )
             )
     );
